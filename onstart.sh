@@ -15,4 +15,5 @@ if [ -s "$GHTOK" ]; then
   done
 fi
 pgrep -f "pod-runtime/sync.sh" >/dev/null || setsid nohup bash sync.sh >> /workspace/sync.log 2>&1 < /dev/null &
-pgrep -f "pod-runtime/worker.py" >/dev/null || setsid nohup python3 worker.py >> /workspace/worker.log 2>&1 < /dev/null &
+pgrep -f "pod-runtime/worker.py" >/dev/null || setsid nohup python3 -u /workspace/pod-runtime/worker.py >> /workspace/worker.log 2>&1 < /dev/null &
+sleep 1  # let the daemon detach before the shell exits
