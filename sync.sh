@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Pod self-update loop: the CI/CD delivery end. Push to this repo -> every
-# pod has it within a minute. No credentials needed (repo is public).
-# HF credentials are NEVER in this repo: the pod expects HF_TOKEN in env or
-# ~/.cache/huggingface/token, placed there BY HAND at provision time.
+# Pod self-update loop: the CI/CD delivery end. Push -> every pod has it
+# within a minute. This public repo needs no credentials; private repos are
+# pulled too when the admin has placed the GitHub token by hand (see README).
+# HF credentials are NEVER in this repo: HF_TOKEN env or
+# ~/.cache/huggingface/token, also placed by hand.
 cd "$(dirname "$0")"
 while true; do
   git fetch --quiet origin main 2>/dev/null
   LOCAL=$(git rev-parse @); REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL")
   if [ "$LOCAL" != "$REMOTE" ]; then
-    git reset --hard origin/main --quiet && echo "[sync] updated to $(git rev-parse --short HEAD) $(date -u +%H:%M:%S)"
+    git reset --hard origin/main --quiet && echo "[sync] pod-runtime -> $(git rev-parse --short HEAD) $(date -u +%H:%M:%S)"
+  fi
+  if [ -s /root/.config/pod-secrets/github-token ]; then
+    for D in /workspace/image-generation /workspace/neural-landscape; do
+      [ -d "$D/.git" ] && git -C "$D" pull --ff-only --quiet 2>/dev/null || true
+    done
   fi
   sleep 60
 done
