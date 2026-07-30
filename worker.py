@@ -10,14 +10,28 @@ Job spec (jobs/<id>.json):
     "script": "bash script",    # the work; exit 0 = success
     "timeoutSec": 7200 }        # optional
 """
-import io, json, os, socket, subprocess, time, datetime, glob, sys
-
-from huggingface_hub import HfApi
+import base64, json, os, socket, subprocess, time, datetime, glob, sys
+import urllib.request
 
 REPO = os.environ.get("HF_REPO_ID", "miguelemosreverte/alambique-datasets")
 SCENE = "world/kazbek-c10"
 HERE = os.path.dirname(os.path.abspath(__file__))
-api = HfApi()
+
+def _token():
+    return os.environ.get("HF_TOKEN") or open(os.path.expanduser("~/.cache/huggingface/token")).read().strip()
+
+def _commit(ops, summary, timeout=60):
+    """Raw commit API with a HARD timeout — a stalled socket must fail loudly,
+    never hang the worker into silent uselessness."""
+    body = [json.dumps({"key": "header", "value": {"summary": summary}})]
+    for op in ops:
+        body.append(json.dumps(op))
+    req = urllib.request.Request(
+        f"https://huggingface.co/api/datasets/{REPO}/commit/main",
+        data="\n".join(body).encode(),
+        headers={"Authorization": f"Bearer {_token()}", "Content-Type": "application/x-ndjson"},
+        method="POST")
+    urllib.request.urlopen(req, timeout=timeout)
 
 
 def pod_name():
@@ -56,14 +70,13 @@ def fetch(path):
 
 
 def put(path, obj, summary):
-    api.upload_file(path_or_fileobj=io.BytesIO(json.dumps(obj, indent=2).encode()),
-                    path_in_repo=path, repo_id=REPO, repo_type="dataset",
-                    commit_message=summary)
+    _commit([{"key": "file", "value": {"path": path,
+              "content": base64.b64encode(json.dumps(obj, indent=2).encode()).decode(),
+              "encoding": "base64"}}], summary)
 
 
 def rm(path, summary):
-    api.delete_file(path_in_repo=path, repo_id=REPO, repo_type="dataset",
-                    commit_message=summary)
+    _commit([{"key": "deletedFile", "value": {"path": path}}], summary)
 
 
 def with_lock(mutate, summary):
@@ -126,9 +139,13 @@ def run_job(job):
 def main():
     log(f"worker up as {ME}")
     last_beat = 0.0
+    cycles = 0
     not_ready: dict[str, float] = {}
     while True:
         try:
+            cycles += 1
+            if cycles % 10 == 1:
+                log(f"cycle {cycles}: scanning jobs")
             if time.time() - last_beat > 900:
                 put(f"pods/{ME}.json", {"pod": ME, "aliveAt": UTC(),
                     "commit": subprocess.run(["git", "-C", HERE, "rev-parse", "--short", "HEAD"],
