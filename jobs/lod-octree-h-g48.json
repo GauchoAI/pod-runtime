@@ -1,6 +1,0 @@
-{
-  "id": "lod-octree-h-g48",
-  "ready": "curl -sfI -H \"Authorization: Bearer $(cat ~/.cache/huggingface/token)\" https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/checkpoints/kazbek-run-h-max/kazbek-run-h-max.ply >/dev/null && ! pgrep -f 'simple[_]trainer' >/dev/null",
-  "script": "set -e\nTOK=$(cat ~/.cache/huggingface/token)\ncurl -sfL -H \"Authorization: Bearer $TOK\" -o /tmp/h.ply https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/checkpoints/kazbek-run-h-max/kazbek-run-h-max.ply\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\ncd /workspace/image-generation && export GIT_TERMINAL_PROMPT=0; timeout 60 git fetch -q origin main && git reset -q --hard origin/main || true\nSTAGE=/workspace/lod-stage-48/world/kazbek-c10\nmkdir -p $STAGE\n$DENO_INSTALL/bin/deno run --allow-read --allow-write /workspace/image-generation/splat-viewer/build-octree.ts /tmp/h.ply $STAGE/octree-h-g48 --grid 48 --proxy-stride 8 --proxy-inflate 2\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/lod-stage-48', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho LOD-G48-DONE",
-  "timeoutSec": 3600
-}
