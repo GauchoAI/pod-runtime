@@ -210,7 +210,7 @@ def main():
                 try:
                     age = time.time() - datetime.datetime.fromisoformat(
                         c["claimedAt"].replace("Z", "+00:00")).timestamp()
-                    if age < c.get("claimTtlSec", 21600):
+                    if age < c.get("claimTtlSec", 5400):
                         claimed.add(cid)
                     else:
                         log(f"claim {cid} by {c.get('holder')} expired ({age/3600:.1f} h) — eligible again")

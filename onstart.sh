@@ -17,7 +17,7 @@ if [ -s "$GHTOK" ]; then
   git config --global credential.helper "store --file=$CRED"
   for R in GauchoAI/image-generation miguelemosreverte/neural-landscape; do
     D="/workspace/$(basename "$R")"
-    if [ -d "$D/.git" ]; then timeout 120 git -C "$D" pull --ff-only --quiet || true
+    if [ -d "$D/.git" ]; then (timeout 120 git -C "$D" fetch --quiet origin && timeout 30 git -C "$D" reset --hard origin/HEAD --quiet) || true
     else timeout 300 git clone --quiet "https://github.com/$R" "$D" || true; fi
   done
 fi
