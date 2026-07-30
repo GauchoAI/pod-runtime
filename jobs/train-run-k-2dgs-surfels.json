@@ -2,5 +2,9 @@
   "id": "train-run-k-2dgs-surfels",
   "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/scenes/kazbek-run-c10/images && ! pgrep -f 'simple[_]trainer' >/dev/null && ! pgrep -f 'offline[-]render' >/dev/null",
   "script": "set -e\ncd /workspace/gsplat\npython3 examples/simple_trainer_2dgs.py --data-dir /workspace/scenes/kazbek-run-c10 --data-factor 1 \\\n  --result-dir /workspace/results/gsplat_kazbek-run-k-2dgs --max-steps 60000 --normal-loss --disable-viewer\necho RUN-K-DONE",
-  "timeoutSec": 21600
+  "timeoutSec": 21600,
+  "resources": {
+    "gpu": 1.0,
+    "cpu": 0.3
+  }
 }

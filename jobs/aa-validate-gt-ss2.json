@@ -2,5 +2,9 @@
   "id": "aa-validate-gt-ss2",
   "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/neural-landscape && ! pgrep -f 'simple[_]trainer' >/dev/null && ! pgrep -f 'offline[-]render' >/dev/null",
   "script": "set -e\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\ncd /workspace/neural-landscape\nexport GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1; timeout 60 git fetch -q origin main && git reset -q --hard origin/main || true\nrm -rf artifacts/gt/flight-03\n$DENO_INSTALL/bin/deno run --allow-read --allow-write --allow-net --allow-run --allow-env \\\n  --node-modules-dir=auto --unstable-webgpu tools/offline-render.ts \\\n  --flight=flight-03 --fps=4 --duration=5 --width=960 --height=540 --gt --gt-ss=2 --no-cache \\\n  --output=artifacts/video/validate-rgb.mp4\n$DENO_INSTALL/bin/deno run --allow-read --allow-write --node-modules-dir=auto tools/gt-viz-frames.ts artifacts/gt/flight-03\n$DENO_INSTALL/bin/deno run --allow-read --allow-write --node-modules-dir=auto tools/gt-instances.ts artifacts/gt/flight-03\ncp artifacts/gt/flight-03/viz-depth/depth_0001.png /tmp/validate-depth1.png\ncp artifacts/gt/flight-03/normal_0001.png /tmp/validate-normal1.png\ncp artifacts/gt/flight-03/viz-instance/instance_0001.png /tmp/validate-instance1.png\nffmpeg -nostdin -y -v error -ss 0 -i artifacts/video/validate-rgb.mp4 -frames:v 1 /tmp/validate-rgb1.png\npython3 /workspace/pod-runtime/pod/hf_upload.py --repo miguelemosreverte/alambique-datasets --prefix preview/validate-ss2 \\\n  artifacts/video/validate-rgb.mp4 /tmp/validate-rgb1.png /tmp/validate-depth1.png /tmp/validate-normal1.png /tmp/validate-instance1.png\necho VALIDATE-SS2-DONE",
-  "timeoutSec": 1800
+  "timeoutSec": 1800,
+  "resources": {
+    "gpu": 0.7,
+    "cpu": 0.5
+  }
 }

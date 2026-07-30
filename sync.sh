@@ -9,8 +9,11 @@ while true; do
   LOCAL=$(git rev-parse @); REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL")
   if [ "$LOCAL" != "$REMOTE" ]; then
     git reset --hard origin/main --quiet && echo "[sync] pod-runtime -> $(git rev-parse --short HEAD) $(date -u +%H:%M:%S)"
-    while [ -f /tmp/worker-busy ]; do sleep 30; done  # never behead a working worker
-    pkill -f "pod-runtime/worker.py" 2>/dev/null   # new code -> new worker
+    if [ -f /tmp/worker-busy ]; then
+      echo "[sync] code updated; worker busy ($(cat /tmp/worker-busy)) — restart postponed"
+    else
+      pkill -f "pod-runtime/worker.py" 2>/dev/null # new code -> new worker
+    fi
     setsid nohup bash /workspace/pod-runtime/onstart.sh >> /workspace/onstart.log 2>&1 < /dev/null &
     exec bash /workspace/pod-runtime/sync.sh        # reload THIS loop too (absolute path)
   fi

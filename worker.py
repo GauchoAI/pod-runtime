@@ -10,7 +10,7 @@ Job spec (jobs/<id>.json):
     "script": "bash script",    # the work; exit 0 = success
     "timeoutSec": 7200 }        # optional
 """
-import base64, json, os, socket, subprocess, time, datetime, glob, sys
+import base64, json, os, socket, subprocess, time, datetime, glob, sys, threading
 import urllib.request
 
 REPO = os.environ.get("HF_REPO_ID", "miguelemosreverte/alambique-datasets")
@@ -108,6 +108,42 @@ def with_lock(mutate, summary):
     return True
 
 
+# ---- resource budgets: jobs declare {"gpu": 0..1, "cpu": 0..1}; the worker
+# packs concurrent jobs into the pod's envelope. GPU idle while CPU uploads
+# was the granular-control trap — budgets dissolve it. (Miguel's tuple list.)
+CAPACITY = {"gpu": 1.0, "cpu": 1.0}
+DEFAULT_RES = {"gpu": 1.0, "cpu": 0.5}  # unknown jobs stay exclusive on GPU
+running_lock = threading.Lock()
+running = {}  # jid -> resources
+
+
+def res_of(job):
+    r = dict(DEFAULT_RES)
+    r.update(job.get("resources", {}))
+    return r
+
+
+def fits(job):
+    r = res_of(job)
+    with running_lock:
+        for k in CAPACITY:
+            if sum(x[k] for x in running.values()) + r[k] > CAPACITY[k] + 1e-9:
+                return False
+    return True
+
+
+def busy_write():
+    with running_lock:
+        names = ",".join(sorted(running)) or None
+    if names:
+        open("/tmp/worker-busy", "w").write(names)
+    else:
+        try:
+            os.remove("/tmp/worker-busy")
+        except FileNotFoundError:
+            pass
+
+
 def run_job(job):
     jid = job["id"]
 
@@ -117,8 +153,10 @@ def run_job(job):
     log(f"attempting claim: {jid}")
     if not with_lock(claim, f"{ME} claims {jid}"):
         return
-    log(f"claimed {jid}; running")
-    open("/tmp/worker-busy", "w").write(jid)
+    log(f"claimed {jid}; running (res {res_of(job)})")
+    with running_lock:
+        running[jid] = res_of(job)
+    busy_write()
     try:
         r = subprocess.run(["bash", "-lc", job["script"]], timeout=job.get("timeoutSec", 7200),
                            capture_output=True, text=True)
@@ -137,10 +175,9 @@ def run_job(job):
         if with_lock(finish, f"{jid} {'done' if ok else 'FAILED'} on {ME}"):
             break
         time.sleep(30)
-    try:
-        os.remove("/tmp/worker-busy")
-    except FileNotFoundError:
-        pass
+    with running_lock:
+        running.pop(jid, None)
+    busy_write()
     if ok and job.get("_queue_path"):
         try:
             rm(job["_queue_path"], f"queue request served by {ME}")
@@ -249,13 +286,15 @@ def main():
                     continue
                 if time.time() < not_ready.get(jid, 0):
                     continue
+                if not fits(job):
+                    continue  # envelope full for this shape; try others
                 if job.get("ready"):
                     probe = subprocess.run(["bash", "-lc", job["ready"]], capture_output=True)
                     if probe.returncode != 0:
                         not_ready[jid] = time.time() + 120
                         continue
-                run_job(job)
-                break  # one job per cycle; re-read the ledger before the next
+                threading.Thread(target=run_job, args=(job,), daemon=True).start()
+                time.sleep(8)  # let the claim land before scanning further
         except Exception as e:
             log(f"cycle error: {e}")
         time.sleep(60)

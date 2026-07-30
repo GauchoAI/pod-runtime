@@ -2,5 +2,9 @@
   "id": "train-run-g-dense-clean-v2",
   "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 4090 && test -d /workspace/scenes/kazbek-run-c10/images && ! pgrep -f 'simple[_]trainer' >/dev/null && python3 -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)'",
   "script": "set -e\ncd /workspace/gsplat\npython3 examples/simple_trainer.py default --data-dir /workspace/scenes/kazbek-run-c10 --data-factor 1 --result-dir /workspace/results/gsplat_kazbek-run-g-dense-clean --max-steps 60000 --strategy.refine-stop-iter 45000 --strategy.grow-grad2d 0.0001 --strategy.prune-opa 0.05 --opacity-reg 0.001 --scale-reg 0.001 --disable-viewer\necho RUN-G-V2-DONE",
-  "timeoutSec": 14400
+  "timeoutSec": 14400,
+  "resources": {
+    "gpu": 1.0,
+    "cpu": 0.3
+  }
 }

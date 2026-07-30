@@ -2,5 +2,9 @@
   "id": "finalize-run-l-gtmax",
   "ready": "ls /workspace/results/gsplat_kazbek-run-l-gtmax/ckpts/ckpt_*_rank0.pt >/dev/null 2>&1 && ! pgrep -f 'result-dir.*run[-]l-gtmax' >/dev/null",
   "script": "set -e\nRES=/workspace/results/gsplat_kazbek-run-l-gtmax\nCKPT=$(ls $RES/ckpts/ckpt_*_rank0.pt | sort -V | tail -1)\npython3 /workspace/pod-runtime/pod/export_ply.py \"$CKPT\" /tmp/kazbek-run-l-gtmax.ply\npython3 /workspace/pod-runtime/pod/hf_upload.py --repo miguelemosreverte/alambique-datasets --prefix checkpoints/kazbek-run-l-gtmax \"$CKPT\" /tmp/kazbek-run-l-gtmax.ply\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\nSTAGE=/workspace/vault-stage-l-gtmax/world/kazbek-c10\nmkdir -p $STAGE\n$DENO_INSTALL/bin/deno run --allow-read --allow-write /workspace/image-generation/splat-viewer/build-octree.ts /tmp/kazbek-run-l-gtmax.ply $STAGE/octree-run-l-gtmax\nD=$(ls -d $STAGE/*octree* | head -1)\n[ \"$D\" = \"$STAGE/octree-run-l-gtmax\" ] || mv \"$D\" $STAGE/octree-run-l-gtmax\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/vault-stage-l-gtmax', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho FINALIZE-l-gtmax-DONE",
-  "timeoutSec": 3600
+  "timeoutSec": 3600,
+  "resources": {
+    "gpu": 0.0,
+    "cpu": 0.4
+  }
 }
