@@ -1,0 +1,69 @@
+{
+  "_doc": "Vast.ai host quality ledger. Deployers read this to skip known-bad hosts and prefer known-good ones; every rental audition appends a verdict. Machine id is the durable key (ask/offer ids rotate; machine_id persists per physical host). Preflight bar: github+HF reachable AND measured HF throughput >= 15 MB/s.",
+  "good": [
+    {
+      "machine_id": 2293,
+      "ask_id_seen": 46114692,
+      "instance_seen": 46259149,
+      "gpu": "RTX 5090 32GB",
+      "geo": "Taiwan, TW",
+      "notes": "THE keeper. Xeon 8470 208c / 256GB RAM / Gen5 PCIe 53GB/s / enterprise NVMe 6.5GB/s. Measured 24 MB/s to HF. Cold start: boot 24s, ssh 19s, preflight 13s, setup 2m42s (zero compile, wheelhouse), Blackwell PTX JIT smoke 34s. ~$0.96/hr. reliability 0.9993.",
+      "last_seen": "2026-07-30"
+    },
+    {
+      "machine_id": 34591,
+      "ask_id_seen": null,
+      "gpu": "RTX 4090 24GB",
+      "geo": "unknown",
+      "notes": "The original igen pod (instance 46176315, root@ssh7.vast.ai:16314). Full bootstrap + wheelhouse build done here. HF upload measured ~26 MB/s. Reliable across many hours 2026-07-29/30.",
+      "last_seen": "2026-07-30"
+    },
+    {
+      "machine_id": 44842,
+      "ask_id_seen": null,
+      "instance_seen": 46260275,
+      "gpu": "RTX 5090 32GB",
+      "geo": "South Korea, KR",
+      "notes": "The challenger. Ryzen 9 7950X 32c. Passed full audition. CLEAN cold-start record: rent->ready 5m17s (boot 25s, ssh 4s, preflight 14s, scripts 17s, setup 3m48s zero-compile, smoke 29s w/ 22.4s Blackwell JIT). ~$0.46/hr. root@ssh6.vast.ai:20274.",
+      "last_seen": "2026-07-30"
+    }
+  ],
+  "bad": [
+    {
+      "machine_id": null,
+      "ask_id_seen": 46254713,
+      "instance_seen": 46254821,
+      "gpu": "RTX 5090 32GB",
+      "geo": "California, US",
+      "verdict": "no egress to github.com AND huggingface.co (both timeout); pypi+naver fine. Unusable for HF-centric flow.",
+      "date": "2026-07-30"
+    },
+    {
+      "machine_id": null,
+      "ask_id_seen": 44614428,
+      "instance_seen": 46255544,
+      "gpu": "RTX 5090 32GB",
+      "geo": "unknown",
+      "verdict": "egress reachable but measured HF throughput ~1 MB/s vs 800+ Mbps advertised. Bundle download would take ~30 min. Rejected by bandwidth gate.",
+      "date": "2026-07-30"
+    },
+    {
+      "machine_id": null,
+      "ask_id_seen": 46248871,
+      "instance_seen": 46258177,
+      "gpu": "RTX 5090 32GB",
+      "geo": "unknown",
+      "verdict": "HF throughput 2 MB/s \u2014 below 15 MB/s bar.",
+      "date": "2026-07-30"
+    },
+    {
+      "machine_id": null,
+      "ask_id_seen": 46247642,
+      "instance_seen": 46258378,
+      "gpu": "RTX 5090 32GB",
+      "geo": "unknown",
+      "verdict": "no egress to github/HF (000).",
+      "date": "2026-07-30"
+    }
+  ]
+}
