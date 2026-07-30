@@ -116,6 +116,7 @@ def run_job(job):
     if not with_lock(claim, f"{ME} claims {jid}"):
         return
     log(f"claimed {jid}; running")
+    open("/tmp/worker-busy", "w").write(jid)
     try:
         r = subprocess.run(["bash", "-lc", job["script"]], timeout=job.get("timeoutSec", 7200),
                            capture_output=True, text=True)
@@ -134,6 +135,56 @@ def run_job(job):
         if with_lock(finish, f"{jid} {'done' if ok else 'FAILED'} on {ME}"):
             break
         time.sleep(30)
+    try:
+        os.remove("/tmp/worker-busy")
+    except FileNotFoundError:
+        pass
+    if ok and job.get("_queue_path"):
+        try:
+            rm(job["_queue_path"], f"queue request served by {ME}")
+        except Exception:
+            pass
+
+
+def list_queue():
+    """Tile-generation requests awaiting a builder (best-effort listing)."""
+    try:
+        req = urllib.request.Request(
+            f"https://huggingface.co/api/datasets/{REPO}/tree/main/generation-queue",
+            headers={"Authorization": f"Bearer {_token()}"})
+        entries = json.loads(urllib.request.urlopen(req, timeout=30).read())
+        out = []
+        for e in entries[:8]:
+            body = fetch(e["path"])
+            if body:
+                body["_path"] = e["path"]
+                out.append(body)
+        return out
+    except Exception:
+        return []
+
+
+def queue_job(jid, vault, req):
+    """A tile request means the vault's octree is missing pieces: rebuild the
+    whole octree from its model PLY and upload — supersets any single leaf."""
+    scene_dir = "/".join(vault.split("/")[:-1])          # world/<scene>
+    ver = vault.split("/")[-1]                            # octree-vN
+    script = f"""set -e
+TOK=$(cat ~/.cache/huggingface/token)
+LEDGER=$(curl -sfL -H "Authorization: Bearer $TOK" "https://huggingface.co/datasets/{REPO}/resolve/main/{scene_dir}/ledger.json?cb=$RANDOM")
+PLY=$(echo "$LEDGER" | python3 -c "import json,sys; L=json.load(sys.stdin); print(next((m.get('ply') for m in L.get('models',{{}}).values() if m.get('ply')), ''))")
+test -n "$PLY" || {{ echo "no PLY in ledger for {vault}"; exit 1; }}
+curl -sfL -H "Authorization: Bearer $TOK" -o /tmp/queue-model.ply "https://huggingface.co/datasets/{REPO}/resolve/main/$PLY"
+export DENO_INSTALL=$HOME/.deno
+command -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)
+STAGE=/workspace/queue-stage/{scene_dir}
+mkdir -p $STAGE
+$DENO_INSTALL/bin/deno run --allow-read --allow-write /workspace/image-generation/splat-viewer/build-octree.ts /tmp/queue-model.ply $STAGE/{ver}
+D=$(ls -d $STAGE/*octree* | head -1); [ "$D" = "$STAGE/{ver}" ] || mv "$D" $STAGE/{ver}
+python3 -c "from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/queue-stage', repo_id='{REPO}', repo_type='dataset', print_report=False)"
+echo QUEUE-{ver}-REBUILT"""
+    return {{"id": jid, "script": script, "timeoutSec": 3600,
+             "_queue_path": req.get("_path")}}
 
 
 def main():
@@ -154,7 +205,26 @@ def main():
                 last_beat = time.time()
             ledger = fetch(f"{SCENE}/ledger.json") or {}
             done = set(ledger.get("completed", {})) | set(ledger.get("failed", {}))
-            claimed = set(ledger.get("claims", {}))
+            claimed = set()
+            for cid, c in (ledger.get("claims") or {}).items():
+                try:
+                    age = time.time() - datetime.datetime.fromisoformat(
+                        c["claimedAt"].replace("Z", "+00:00")).timestamp()
+                    if age < c.get("claimTtlSec", 21600):
+                        claimed.add(cid)
+                    else:
+                        log(f"claim {cid} by {c.get('holder')} expired ({age/3600:.1f} h) — eligible again")
+                except Exception:
+                    claimed.add(cid)
+            # the lazy-world loop: runtime files tile requests into
+            # generation-queue/; any worker turns them into octree rebuilds.
+            for req in list_queue():
+                vault = req.get("vault", "")
+                jid = f"queue-{vault.replace('/', '_')}"
+                if jid in done or jid in claimed:
+                    continue
+                run_job(queue_job(jid, vault, req))
+                break
             for jf in sorted(glob.glob(f"{HERE}/jobs/*.json")):
                 job = json.load(open(jf))
                 jid = job["id"]
