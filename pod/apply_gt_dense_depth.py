@@ -85,7 +85,12 @@ if MARK not in s:
             if cfg.depth_loss and "gt_sky" in data:
                 _sky = data["gt_sky"].to(device)
                 if _sky.any():
-                    loss += 0.05 * (alphas[..., 0] * _sky).sum() / _sky.sum().clamp(min=1)"""
+                    loss += 0.05 * (alphas[..., 0] * _sky).sum() / _sky.sum().clamp(min=1)
+            # terrain says I AM SOLID: accumulated alpha -> 1 on exact rock
+            if cfg.depth_loss and "gt_weight" in data:
+                _rock = (data["gt_weight"].to(device) >= 0.999).float()
+                if _rock.any():
+                    loss += 0.02 * ((1.0 - alphas[..., 0]) * _rock).sum() / _rock.sum().clamp(min=1)"""
     assert old in s, "simple_trainer.py anchor not found — pin drifted"
     s = s.replace(old, new, 1)
     open(p, "w").write(s)
