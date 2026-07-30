@@ -47,8 +47,16 @@ if MARK not in s:
                     _scale = float(np.linalg.norm(self.parser.transform[0, :3])) if hasattr(self.parser, "transform") else 1.0
                     _gt = _d16 * 0.032 * _scale
                     _gt[_d16 >= 65535] = np.inf          # sky sentinel
+                    _k = _cls % 4                        # class (std buckets ride upper bits)
+                    _w = np.zeros_like(_gt, dtype=np.float32)
+                    _w[_k == 1] = 1.0                    # terrain: exact -> full force
+                    _bucket = (_cls // 4).astype(np.float32)
+                    _veg = _k >= 2
+                    # canopy: soft; with v2 std buckets, confidence-weighted
+                    _w[_veg] = np.where(_bucket[_veg] > 0, 0.6 * np.exp(-_bucket[_veg] / 3.0), 0.3)
                     data["gt_depth"] = torch.from_numpy(_gt).float()
-                    data["gt_weight"] = torch.from_numpy((_cls == 1).astype(np.float32))
+                    data["gt_weight"] = torch.from_numpy(_w)
+                    data["gt_sky"] = torch.from_numpy((_k == 0).astype(np.float32))
 
         return data"""
     assert old in s, "colmap.py anchor not found — pin drifted"
@@ -71,8 +79,13 @@ if MARK not in s:
                 _rd = renders[..., 3]                # [1, H, W] expected depth
                 _valid = (_gtw > 0) & torch.isfinite(_gtd)
                 if _valid.any():
-                    gt_dense_loss = (_rd - _gtd).abs()[_valid].mean() / self.scene_scale
-                    loss += gt_dense_loss * cfg.depth_lambda"""
+                    gt_dense_loss = ((_rd - _gtd).abs() * _gtw)[_valid].mean() / self.scene_scale
+                    loss += gt_dense_loss * cfg.depth_lambda
+            # sky says NOTHING MAY EXIST HERE: accumulated alpha -> 0 on class-0
+            if cfg.depth_loss and "gt_sky" in data:
+                _sky = data["gt_sky"].to(device)
+                if _sky.any():
+                    loss += 0.05 * (alphas[..., 0] * _sky).sum() / _sky.sum().clamp(min=1)"""
     assert old in s, "simple_trainer.py anchor not found — pin drifted"
     s = s.replace(old, new, 1)
     open(p, "w").write(s)
