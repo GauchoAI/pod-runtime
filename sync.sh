@@ -13,6 +13,7 @@ while true; do
     git reset --hard origin/main --quiet && echo "[sync] pod-runtime -> $(git rev-parse --short HEAD) $(date -u +%H:%M:%S)"
     pkill -f "pod-runtime/worker.py" 2>/dev/null   # new code -> new worker
     bash onstart.sh                                 # restart daemons, repull repos
+    exec bash "$0"                                  # reload THIS script too
   fi
   if [ -s /root/.config/pod-secrets/github-token ]; then
     for D in /workspace/image-generation /workspace/neural-landscape; do
