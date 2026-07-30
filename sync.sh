@@ -1,24 +1,19 @@
 #!/usr/bin/env bash
-export GIT_LFS_SKIP_SMUDGE=1  # media lives on HF, never via LFS (budget exhausted by design)
-# Pod self-update loop: the CI/CD delivery end. Push -> every pod has it
-# within a minute. This public repo needs no credentials; private repos are
-# pulled too when the admin has placed the GitHub token by hand (see README).
-# HF credentials are NEVER in this repo: HF_TOKEN env or
-# ~/.cache/huggingface/token, also placed by hand.
-cd "$(dirname "$0")"
+# Pod self-update loop. Push -> every pod has it within a minute. Public repo,
+# zero credentials. HF token + GitHub token are placed BY HAND (see README).
+export GIT_LFS_SKIP_SMUDGE=1
+export GIT_TERMINAL_PROMPT=0
+cd /workspace/pod-runtime
 while true; do
-  git fetch --quiet origin main 2>/dev/null
+  timeout 60 git fetch --quiet origin main 2>/dev/null
   LOCAL=$(git rev-parse @); REMOTE=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL")
   if [ "$LOCAL" != "$REMOTE" ]; then
     git reset --hard origin/main --quiet && echo "[sync] pod-runtime -> $(git rev-parse --short HEAD) $(date -u +%H:%M:%S)"
     pkill -f "pod-runtime/worker.py" 2>/dev/null   # new code -> new worker
-    bash onstart.sh                                 # restart daemons, repull repos
-    exec bash "$0"                                  # reload THIS script too
+    setsid nohup bash /workspace/pod-runtime/onstart.sh >> /workspace/onstart.log 2>&1 < /dev/null &
+    exec bash /workspace/pod-runtime/sync.sh        # reload THIS loop too (absolute path)
   fi
-  if [ -s /root/.config/pod-secrets/github-token ]; then
-    for D in /workspace/image-generation /workspace/neural-landscape; do
-      [ -d "$D/.git" ] && git -C "$D" pull --ff-only --quiet 2>/dev/null || true
-    done
-  fi
+  # daemon guard every cycle: a dead worker resurrects within a minute
+  pgrep -f "pod-runtime/worker.py" >/dev/null || setsid nohup python3 -u /workspace/pod-runtime/worker.py >> /workspace/worker.log 2>&1 < /dev/null &
   sleep 60
 done
