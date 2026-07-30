@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export GIT_LFS_SKIP_SMUDGE=1  # media lives on HF, never via LFS (budget exhausted by design)
 # Wake-up hook: a stopped pod that restarts only needs this.
 cd "$(dirname "$0")" && git pull --ff-only --quiet || true
 # Private repos: readable IFF the admin placed the GitHub token by hand.
