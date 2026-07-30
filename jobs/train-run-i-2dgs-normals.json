@@ -1,6 +1,6 @@
 {
   "id": "train-run-i-2dgs-normals",
-  "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/scenes/kazbek-run-c10/images && ! pgrep -f simple_trainer >/dev/null && python3 -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)'",
+  "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/scenes/kazbek-run-c10/images && ! pgrep -f 'simple[_]trainer' >/dev/null && python3 -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)'",
   "script": "set -e\ncd /workspace/gsplat\npython3 examples/simple_trainer_2dgs.py default --data-dir /workspace/scenes/kazbek-run-c10 --data-factor 1 --result-dir /workspace/results/gsplat_kazbek-run-i-2dgs --max-steps 30000 --normal-loss --disable-viewer\ngrep -oE 'PSNR: [0-9.]+, SSIM: [0-9.]+.*' /workspace/results/gsplat_kazbek-run-i-2dgs/stats/val*.json 2>/dev/null || true\necho RUN-I-2DGS-DONE",
   "timeoutSec": 10800
 }

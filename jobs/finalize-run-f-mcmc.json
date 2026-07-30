@@ -1,6 +1,6 @@
 {
   "id": "finalize-run-f-mcmc",
-  "ready": "ls /workspace/results/gsplat_kazbek-run-f-mcmc/ckpts/ckpt_*_rank0.pt >/dev/null 2>&1 && ! pgrep -f 'result-dir.*run-f-mcmc' >/dev/null",
+  "ready": "ls /workspace/results/gsplat_kazbek-run-f-mcmc/ckpts/ckpt_*_rank0.pt >/dev/null 2>&1 && ! pgrep -f 'result-dir.*run[-]f-mcmc' >/dev/null",
   "script": "set -e\nRES=/workspace/results/gsplat_kazbek-run-f-mcmc\nCKPT=$(ls $RES/ckpts/ckpt_*_rank0.pt | sort | tail -1)\npython3 /workspace/pod-runtime/pod/export_ply.py \"$CKPT\" /tmp/kazbek-run-f-mcmc.ply\npython3 /workspace/pod-runtime/pod/hf_upload.py --repo miguelemosreverte/alambique-datasets --prefix checkpoints/kazbek-run-f-mcmc \"$CKPT\" /tmp/kazbek-run-f-mcmc.ply\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\nSTAGE=/workspace/vault-stage-f-mcmc/world/kazbek-c10\nmkdir -p $STAGE\n$DENO_INSTALL/bin/deno run --allow-read --allow-write /workspace/image-generation/splat-viewer/build-octree.ts /tmp/kazbek-run-f-mcmc.ply $STAGE/octree-run-f-mcmc\nD=$(ls -d $STAGE/*octree* | head -1)\n[ \"$D\" = \"$STAGE/octree-run-f-mcmc\" ] || mv \"$D\" $STAGE/octree-run-f-mcmc\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/vault-stage-f-mcmc', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho FINALIZE-f-mcmc-DONE",
   "timeoutSec": 3600
 }

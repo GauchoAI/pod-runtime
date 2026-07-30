@@ -1,6 +1,6 @@
 {
   "id": "campaign-render-backfill",
-  "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/neural-landscape && ! pgrep -f simple_trainer >/dev/null",
+  "ready": "nvidia-smi --query-gpu=name --format=csv,noheader | grep -q 5090 && test -d /workspace/neural-landscape && ! pgrep -f 'simple[_]trainer' >/dev/null",
   "script": "set -e\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\ncd /workspace/neural-landscape\ngit pull -q --ff-only || true\nfor F in $(ls public/flights/flight-03*.json | sed 's|public/flights/||; s|\\.json||'); do\n  echo \"=== campaign render: $F (cache decides) ===\"\n  $DENO_INSTALL/bin/deno run --allow-read --allow-write --allow-net --allow-run --allow-env \\\n    --node-modules-dir=auto --unstable-webgpu \\\n    tools/offline-render.ts --flight=$F --fps=30 --width=1920 --height=1080 || echo \"RENDER-FAILED $F\"\ndone\necho CAMPAIGN-BACKFILL-DONE",
   "timeoutSec": 14400
 }
