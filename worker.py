@@ -199,11 +199,26 @@ def main():
             cycles += 1
             if cycles % 10 == 1:
                 log(f"cycle {cycles}: scanning jobs")
-            if time.time() - last_beat > 900:
+            if time.time() - last_beat > 300:
+                # the ledger must make idleness VISIBLE: util + current job every
+                # 5 min. An idle GPU with eligible work is an accounting red flag.
+                try:
+                    util = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu",
+                                           "--format=csv,noheader,nounits"],
+                                          capture_output=True, text=True, timeout=10).stdout.strip()
+                except Exception:
+                    util = "?"
+                busy = None
+                try:
+                    busy = open("/tmp/worker-busy").read().strip()
+                except Exception:
+                    pass
                 put(f"pods/{ME}.json", {"pod": ME, "aliveAt": UTC(),
+                    "gpuUtilPct": util, "runningJob": busy,
+                    "status": "WORKING" if busy else "idle-scanning",
                     "commit": subprocess.run(["git", "-C", HERE, "rev-parse", "--short", "HEAD"],
                                              capture_output=True, text=True).stdout.strip()},
-                    f"heartbeat {ME}")
+                    f"heartbeat {ME}: {util}% {'on ' + busy if busy else 'idle'}")
                 last_beat = time.time()
             ledger = fetch(f"{SCENE}/ledger.json") or {}
             done = set(ledger.get("completed", {})) | set(ledger.get("failed", {}))
