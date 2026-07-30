@@ -24,3 +24,11 @@ Stopped pods catch up on wake (`onstart.sh`). Install on a fresh pod:
 ## Layout
 - `pod/` — provisioning, environment snapshot, pipeline, HF upload tools, host ledger
 - `sync.sh` — 60 s self-update loop  ·  `onstart.sh` — wake-up hook
+
+## The worker (no-SSH deployments)
+Every pod runs `worker.py`: it polls `jobs/*.json` (delivered by the sync loop),
+claims work through the HF ledger lock (`world/<scene>/ledger.lock`), executes,
+uploads artifacts to the vault, and heartbeats to `pods/<name>.json`.
+**Pushing to this repo IS the deployment.** A job's `ready` probe decides which
+pod takes it (e.g. "the checkpoint lives here"). Results land in the ledger's
+`completed`/`failed` books with output tails.
