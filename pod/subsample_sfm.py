@@ -34,7 +34,7 @@ import struct
 import sys
 
 import numpy as np
-from pycolmap import SceneManager
+import pycolmap  # official (>=3.11) — Reconstruction API, not the SceneManager fork
 
 
 def main():
@@ -59,10 +59,19 @@ def main():
         shutil.copy(full_bin, pts_bin)
         print(f"restored {pts_bin} from {full_bin}")
 
-    sm = SceneManager(sparse)
-    sm.load_points3D()
-    n = len(sm.point3D_ids)
-    xyz = sm.points3D.astype(np.float32)
+    rec = pycolmap.Reconstruction(sparse)
+    p3d = rec.points3D  # id -> Point3D
+    ids_all = np.fromiter(p3d.keys(), dtype=np.int64, count=len(p3d))
+    n = len(ids_all)
+    xyz_full = np.empty((n, 3), dtype=np.float64)
+    rgb_full = np.empty((n, 3), dtype=np.uint8)
+    err_full = np.empty(n, dtype=np.float64)
+    for i, pid in enumerate(ids_all):
+        p = p3d[pid]
+        xyz_full[i] = p.xyz
+        rgb_full[i] = p.color
+        err_full[i] = p.error
+    xyz = xyz_full.astype(np.float32)
     lo, hi = xyz.min(axis=0), xyz.max(axis=0)
     extent = hi - lo
     print(f"loaded {n:,} points; bbox {extent[0]:.2f} x {extent[1]:.2f} x {extent[2]:.2f}")
@@ -143,10 +152,10 @@ def main():
     print(f"keeping {len(keep_idx):,} points "
           f"(voxel + {args.random_tail:,} random-tail)")
 
-    ids = sm.point3D_ids[keep_idx]
-    xyz = sm.points3D[keep_idx]
-    rgb = sm.point3D_colors[keep_idx]
-    err = sm.point3D_errors[keep_idx]
+    ids = ids_all[keep_idx]
+    xyz = xyz_full[keep_idx]
+    rgb = rgb_full[keep_idx]
+    err = err_full[keep_idx]
 
     with open(pts_bin, "wb") as f:
         f.write(struct.pack("<Q", len(keep_idx)))
@@ -157,10 +166,10 @@ def main():
                                 *xyz[i].tolist(),
                                 *[int(c) for c in rgb[i]],
                                 float(err[i])))
-            track = sm.point3D_id_to_images.get(pid, [])
+            track = p3d[pid].track.elements
             f.write(struct.pack("<Q", len(track)))
-            for (img_id, p2d_idx) in track:
-                f.write(struct.pack("<II", int(img_id), int(p2d_idx)))
+            for el in track:
+                f.write(struct.pack("<II", int(el.image_id), int(el.point2D_idx)))
 
     size = os.path.getsize(pts_bin)
     print(f"wrote {pts_bin} ({size:,} bytes)")
