@@ -62,8 +62,8 @@ def fetch(path):
         import urllib.request
         tok = os.environ.get("HF_TOKEN") or open(os.path.expanduser("~/.cache/huggingface/token")).read().strip()
         req = urllib.request.Request(
-            f"https://huggingface.co/datasets/{REPO}/resolve/main/{path}",
-            headers={"Authorization": f"Bearer {tok}"})
+            f"https://huggingface.co/datasets/{REPO}/resolve/main/{path}?cb={time.time_ns()}",
+            headers={"Authorization": f"Bearer {tok}"})  # cache-bust: a stale CDN read of lock/ledger paralyzes claiming
         return json.loads(urllib.request.urlopen(req, timeout=30).read())
     except Exception:
         return None
@@ -93,7 +93,8 @@ def with_lock(mutate, summary):
     time.sleep(5)
     confirm = fetch(lock_path)
     if not confirm or confirm.get("holder") != ME:
-        return False  # lost the race
+        log(f"lock lost to {confirm.get('holder') if confirm else 'unreadable'} — retry next cycle")
+        return False
     try:
         ledger = fetch(f"{SCENE}/ledger.json") or {}
         mutate(ledger)
@@ -113,6 +114,7 @@ def run_job(job):
     def claim(ledger):
         ledger.setdefault("claims", {})[jid] = {"holder": ME, "claimedAt": UTC(), "status": "running"}
 
+    log(f"attempting claim: {jid}")
     if not with_lock(claim, f"{ME} claims {jid}"):
         return
     log(f"claimed {jid}; running")
