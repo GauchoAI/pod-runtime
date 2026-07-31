@@ -1,0 +1,10 @@
+{
+ "id": "eval-run-n-trainer-views",
+ "ready": "nvidia-smi >/dev/null 2>&1 && test -d /workspace/scenes/kazbek-run-c10/images && test -d /workspace/gsplat",
+ "resources": {
+  "gpu": 0.35,
+  "cpu": 0.2
+ },
+ "timeoutSec": 3600,
+ "script": "set -e\nTOK=$(cat ~/.cache/huggingface/token)\ncurl -sfL -H \"Authorization: Bearer $TOK\" -o /tmp/ckpt_n.pt https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/checkpoints/kazbek-run-n-mip/ckpt_99999_rank0.pt\ncd /workspace/gsplat && python3 examples/simple_trainer.py default \\\n  --data-dir /workspace/scenes/kazbek-run-c10 --data-factor 1 \\\n  --result-dir /workspace/results/eval-n-views \\\n  --ckpt /tmp/ckpt_n.pt --antialiased --disable-viewer\nSTAGE=/workspace/results/eval-n-views\nls $STAGE/renders | head\nPICK=$(ls $STAGE/renders/*.png | head -8)\npython3 /workspace/pod-runtime/pod/hf_upload.py --repo miguelemosreverte/alambique-datasets --prefix eval/kazbek-run-n-trainer-views $PICK $STAGE/stats/*.json\necho EVAL-N-VIEWS-DONE"
+}
