@@ -1,0 +1,10 @@
+{
+ "id": "build-atlas-kazbek-v1",
+ "ready": "test -d /workspace/gt && test -f /workspace/gt/gt-index.json && test -d /workspace/scenes/kazbek-run-c10/images && ! pgrep -f 'build_atlas[.]py' >/dev/null",
+ "resources": {
+  "gpu": 0.0,
+  "cpu": 0.7
+ },
+ "timeoutSec": 10800,
+ "script": "set -e\ngit -C /workspace/pod-runtime pull --ff-only >/dev/null 2>&1 || true\nSTAGE=/workspace/atlas-stage/atlas/kazbek-c10\nrm -rf /workspace/atlas-stage && mkdir -p $STAGE\npython3 /workspace/pod-runtime/pod/build_atlas.py /workspace/scenes/kazbek-run-c10 /workspace/gt $STAGE --cell-m 0.5 --tile 512 --zooms 4\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/atlas-stage', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho ATLAS-V1-VAULTED"
+}
