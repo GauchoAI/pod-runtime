@@ -171,18 +171,27 @@ def run_job(job):
         key = "completed" if ok else "failed"
         ledger.setdefault(key, {})[jid] = {"holder": ME, "at": UTC(), "tail": tail[-400:]}
 
-    for _ in range(20):  # finishing the books must not be lost to lock contention
-        if with_lock(finish, f"{jid} {'done' if ok else 'FAILED'} on {ME}"):
-            break
-        time.sleep(30)
-    with running_lock:
-        running.pop(jid, None)
-    busy_write()
-    if ok and job.get("_queue_path"):
-        try:
-            rm(job["_queue_path"], f"queue request served by {ME}")
-        except Exception:
-            pass
+    try:
+        for _ in range(20):  # finishing the books must not be lost to lock contention
+            try:
+                if with_lock(finish, f"{jid} {'done' if ok else 'FAILED'} on {ME}"):
+                    break
+            except Exception as e:  # transient network faults must not kill the thread:
+                log(f"{jid}: booking attempt failed ({e!r}); retrying")
+            time.sleep(30)
+        else:
+            log(f"{jid}: booking LOST after 20 attempts — claim will expire via TTL")
+        if ok and job.get("_queue_path"):
+            try:
+                rm(job["_queue_path"], f"queue request served by {ME}")
+            except Exception:
+                pass
+    finally:
+        # a dead thread must never haunt the budget — ghost reservations
+        # blocked the whole pod once (2026-07-31).
+        with running_lock:
+            running.pop(jid, None)
+        busy_write()
 
 
 def list_queue():
