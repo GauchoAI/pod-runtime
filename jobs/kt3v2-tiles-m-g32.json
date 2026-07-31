@@ -1,0 +1,10 @@
+{
+  "id": "kt3v2-tiles-m-g32",
+  "ready": "curl -sfI -H \"Authorization: Bearer $(cat ~/.cache/huggingface/token)\" https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/checkpoints/kazbek-run-m-fidelity/kazbek-run-m-fidelity.ply >/dev/null",
+  "script": "set -e\nTOK=$(cat ~/.cache/huggingface/token)\nexport GIT_TERMINAL_PROMPT=0\nif [ -d /workspace/kazbek-tiles/.git ]; then (cd /workspace/kazbek-tiles && timeout 60 git fetch -q origin main && git reset -q --hard origin/main); else git clone -q https://github.com/GauchoAI/kazbek-tiles /workspace/kazbek-tiles; fi\ncurl -sfL -H \"Authorization: Bearer $TOK\" -o /tmp/m.ply https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/checkpoints/kazbek-run-m-fidelity/kazbek-run-m-fidelity.ply\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\nSTAGE=/workspace/kt3v2-stage-m32/world/kazbek-c10\nmkdir -p $STAGE\ncd /workspace/kazbek-tiles\n$DENO_INSTALL/bin/deno run --allow-read --allow-write --allow-net --node-modules-dir=auto encode/build-tiles.ts /tmp/m.ply $STAGE/tiles-m-g32 --grid 32 --sh 1\n$DENO_INSTALL/bin/deno run --allow-read --allow-net --node-modules-dir=auto decode/verify-tiles.ts $STAGE/tiles-m-g32 /tmp/m.ply | tail -2\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/kt3v2-stage-m32', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho KT3V2-M-G32-DONE",
+  "resources": {
+    "gpu": 0.0,
+    "cpu": 0.5
+  },
+  "timeoutSec": 5400
+}
