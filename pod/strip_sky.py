@@ -36,9 +36,22 @@ gx = np.clip(((P_n[:, h[0]] - lo[h[0]]) / (span[h[0]] or 1) * G).astype(int), 0,
 gy = np.clip(((P_n[:, h[1]] - lo[h[1]]) / (span[h[1]] or 1) * G).astype(int), 0, G - 1)
 ceiling = np.full((G, G), -1e9)
 np.maximum.at(ceiling, (gx, gy), P_n[:, v])
-# fill empty cells with global max (conservative: keep)
-ceiling[ceiling < -1e8] = P_n[:, v].max()
+floor = np.full((G, G), 1e9)
+np.minimum.at(floor, (gx, gy), P_n[:, v])
+# evidence mask: cells where terrain was actually observed, dilated 1 cell
+evid = ceiling > -1e8
+dil = evid.copy()
+dil[1:, :] |= evid[:-1, :]; dil[:-1, :] |= evid[1:, :]
+dil[:, 1:] |= evid[:, :-1]; dil[:, :-1] |= evid[:, 1:]
+# fill dilated-but-unobserved cells from neighbors' band; truly empty cells stay closed
+for arr, red, init in ((ceiling, np.maximum, -1e9), (floor, np.minimum, 1e9)):
+    src = np.where(evid, arr, init)
+    grown = src.copy()
+    grown[1:, :] = red(grown[1:, :], src[:-1, :]); grown[:-1, :] = red(grown[:-1, :], src[1:, :])
+    grown[:, 1:] = red(grown[:, 1:], src[:, :-1]); grown[:, :-1] = red(grown[:, :-1], src[:, 1:])
+    arr[~evid] = grown[~evid]
 limit = ceiling + margin_m * scale
+floor_lim = floor - margin_m * scale
 
 # our save_ply layout: all-float32 properties, means first
 head = b""
@@ -53,8 +66,11 @@ mx, my = body[:, props.index("x")], body[:, props.index("y")]
 mz3 = body[:, [props.index("x"), props.index("y"), props.index("z")]]
 sgx = np.clip(((mz3[:, h[0]] - lo[h[0]]) / (span[h[0]] or 1) * G).astype(int), 0, G - 1)
 sgy = np.clip(((mz3[:, h[1]] - lo[h[1]]) / (span[h[1]] or 1) * G).astype(int), 0, G - 1)
-keep = mz3[:, v] <= limit[sgx, sgy]
-print(f"sky strip: {nv:,} -> {int(keep.sum()):,} (removed {nv - int(keep.sum()):,} above surface+{margin_m:.0f}m)")
+in_evid = dil[sgx, sgy]
+keep = in_evid & (mz3[:, v] <= limit[sgx, sgy]) & (mz3[:, v] >= floor_lim[sgx, sgy])
+print(f"envelope strip: {nv:,} -> {int(keep.sum()):,} "
+      f"(cut {int((~in_evid).sum()):,} off-footprint, "
+      f"{int((in_evid & ~keep).sum()):,} outside height band ±{margin_m:.0f}m)")
 out = body[keep]
 with open(ply_path, "wb") as g:
     hdr = head.decode(errors="ignore").replace(f"element vertex {nv}", f"element vertex {len(out)}")
