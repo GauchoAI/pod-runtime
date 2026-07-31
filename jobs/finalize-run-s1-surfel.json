@@ -1,0 +1,10 @@
+{
+ "id": "finalize-run-s1-surfel",
+ "ready": "ls /workspace/results/gsplat_kazbek-run-s1-surfel/ckpts/ckpt_*_rank0.pt >/dev/null 2>&1 && ! pgrep -f 'result-dir.*run[-]s1-surfel' >/dev/null",
+ "script": "git -C /workspace/image-generation pull --ff-only >/dev/null 2>&1 || true\nTOK=$(cat ~/.cache/huggingface/token)\nset -e\nRES=/workspace/results/gsplat_kazbek-run-s1-surfel\nCKPT=$(ls $RES/ckpts/ckpt_*_rank0.pt | sort -V | tail -1)\npython3 /workspace/pod-runtime/pod/export_ply.py \"$CKPT\" /tmp/kazbek-run-s1-surfel.ply\npython3 /workspace/pod-runtime/pod/strip_sky.py /tmp/kazbek-run-s1-surfel.ply /workspace/scenes/kazbek-run-c10 <(curl -sfL -H \"Authorization: Bearer $TOK\" \"https://huggingface.co/datasets/miguelemosreverte/alambique-datasets/resolve/main/scenes/kazbek-run-c10/normalization.json\") --margin-m 80 || true\npython3 /workspace/pod-runtime/pod/hf_upload.py --repo miguelemosreverte/alambique-datasets --prefix checkpoints/kazbek-run-s1-surfel \"$CKPT\" /tmp/kazbek-run-s1-surfel.ply\nexport DENO_INSTALL=$HOME/.deno\ncommand -v $DENO_INSTALL/bin/deno >/dev/null 2>&1 || (curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1)\nSTAGE=/workspace/vault-stage-s1-surfel/world/kazbek-c10\nmkdir -p $STAGE\n$DENO_INSTALL/bin/deno run --allow-read --allow-write /workspace/image-generation/splat-viewer/build-octree.ts /tmp/kazbek-run-s1-surfel.ply $STAGE/octree-run-s1-surfel\nD=$(ls -d $STAGE/*octree* | head -1)\n[ \"$D\" = \"$STAGE/octree-run-s1-surfel\" ] || mv \"$D\" $STAGE/octree-run-s1-surfel\npython3 -c \"from huggingface_hub import HfApi; HfApi().upload_large_folder(folder_path='/workspace/vault-stage-s1-surfel', repo_id='miguelemosreverte/alambique-datasets', repo_type='dataset', print_report=False)\"\necho FINALIZE-s1-surfel-DONE",
+ "resources": {
+  "gpu": 0.0,
+  "cpu": 0.4
+ },
+ "timeoutSec": 7200
+}
