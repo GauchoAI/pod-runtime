@@ -12,6 +12,11 @@ import numpy as np
 import imageio.v2 as imageio
 
 ds, gt_root, flight_json = sys.argv[1], sys.argv[2], sys.argv[3]
+_marker = f"{ds}/sparse/0/.dense-init-done"
+if os.path.exists(_marker):
+    print("dense init already applied — skipping (idempotent)")
+    print("DENSE-INIT-OK")
+    sys.exit(0)
 CAP = int(sys.argv[sys.argv.index("--cap") + 1]) if "--cap" in sys.argv else 4_000_000
 
 anchor = json.load(open(flight_json))["anchor"]
@@ -77,5 +82,6 @@ with open(pts_bin, "wb") as f:
     for i in range(len(P)):
         f.write(struct.pack("<Q3d3Bd", pid + i, *P[i].tolist(), *(int(c) for c in Cb[i][:3]), 0.5))
         f.write(struct.pack("<Q", 0))
+open(_marker, "w").write("done")
 print(f"points3D.bin: {n_orig:,} tracked + {len(P):,} GT-seeded = {n_orig + len(P):,}")
 print("DENSE-INIT-OK")

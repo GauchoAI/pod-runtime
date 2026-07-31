@@ -97,4 +97,17 @@ if MARK not in s:
     print("simple_trainer.py: dense depth loss injected")
 else:
     print("simple_trainer.py: already injected")
+# ---- guard: images with zero observations (look-up frames full of sky) ----
+p = f"{GSPLAT}/examples/datasets/colmap.py"
+s = open(p).read()
+if "gt_safe_point_indices" not in s:
+    old = """            point_indices = self.parser.point_indices[image_name]"""
+    new = """            # gt_safe_point_indices: sky-staring frames may have no tracks
+            point_indices = self.parser.point_indices.get(image_name, np.zeros(0, dtype=np.int64))"""
+    assert old in s, "point_indices anchor not found"
+    s = s.replace(old, new, 1)
+    open(p, "w").write(s)
+    print("colmap.py: trackless-frame guard injected")
+else:
+    print("colmap.py: guard already present")
 print("APPLY-GT-DENSE-DEPTH-OK")
